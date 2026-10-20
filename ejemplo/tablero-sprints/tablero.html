@@ -1,0 +1,689 @@
+<!doctype html>
+<!-- gestor-sprints tablero v1 -->
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Tablero de sprints</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Schibsted+Grotesk:wght@600;700;800&display=swap">
+<style>
+/* Layout: tablero de control en una columna — cabecera y sprint, línea de fases tipo metro, indicadores, Kanban a todo lo ancho y pares de paneles debajo (burndown + bitácora, velocidad + backlog). Funciona sin conexión: las fuentes caen a las del sistema. */
+:root{
+  --bg:#eceee9; --surface:#fbfcfa; --surface-2:#f1f3ef; --ink:#15191b; --ink-2:#495055; --muted:#737a7f;
+  --line:#dce0da; --line-strong:#c2c8c1; --accent:#2350c2; --accent-ink:#ffffff; --accent-soft:rgba(35,80,194,.09); --accent-track:#c9d6f2;
+  --st-todo:#8a9196; --st-doing:#2a78d6; --st-review:#6250d6; --st-done:#0ca30c; --st-blocked:#d03b3b; --warn:#e8a200;
+  --shadow:0 1px 2px rgba(20,25,27,.06),0 2px 6px rgba(20,25,27,.04); --overlay:rgba(16,20,22,.42);
+  --f-display:"Schibsted Grotesk","IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+  --r-sm:4px; --r:7px; --r-lg:12px; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0e1011; --surface:#171a1b; --surface-2:#1d2122; --ink:#eef1ee; --ink-2:#bcc3bf; --muted:#8b928e;
+    --line:#2a2f30; --line-strong:#3c4243; --accent:#6d97f2; --accent-ink:#0b1430; --accent-soft:rgba(109,151,242,.13); --accent-track:#26385f;
+    --st-todo:#7f8789; --st-doing:#3987e5; --st-review:#9085e9; --st-done:#0ca30c; --st-blocked:#e05555; --warn:#fab219;
+    --shadow:0 1px 2px rgba(0,0,0,.45); --overlay:rgba(0,0,0,.6); color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0e1011; --surface:#171a1b; --surface-2:#1d2122; --ink:#eef1ee; --ink-2:#bcc3bf; --muted:#8b928e;
+  --line:#2a2f30; --line-strong:#3c4243; --accent:#6d97f2; --accent-ink:#0b1430; --accent-soft:rgba(109,151,242,.13); --accent-track:#26385f;
+  --st-todo:#7f8789; --st-doing:#3987e5; --st-review:#9085e9; --st-done:#0ca30c; --st-blocked:#e05555; --warn:#fab219;
+  --shadow:0 1px 2px rgba(0,0,0,.45); --overlay:rgba(0,0,0,.6); color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 var(--f-body);-webkit-font-smoothing:antialiased}
+h1,h2,h3,p,ol,ul,dl,dd{margin:0}
+ol,ul{padding:0;list-style:none}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+[hidden]{display:none!important}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--r-sm)}
+.wrap{max-width:1240px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 40px;display:grid;gap:18px}
+.eyebrow{font:500 .72rem/1.2 var(--f-mono);letter-spacing:.09em;text-transform:uppercase;color:var(--muted)}
+.mono{font-family:var(--f-mono)}
+.muted{color:var(--muted)}
+
+.notice{display:grid;gap:6px}
+.notice p{display:flex;gap:10px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:10px 14px;font-size:.9rem;color:var(--ink-2)}
+.notice svg{flex:none;width:16px;height:16px;margin-top:3px;color:var(--accent)}
+.notice code{font:500 .85em var(--f-mono);background:var(--surface-2);padding:1px 5px;border-radius:var(--r-sm)}
+
+.top{display:flex;flex-wrap:wrap;gap:16px 32px;align-items:flex-end;justify-content:space-between}
+.top-main{min-width:0;flex:1 1 420px;display:grid;gap:6px}
+h1{font:800 clamp(1.75rem,3.2vw,2.45rem)/1.08 var(--f-display);letter-spacing:-.015em;text-wrap:balance}
+.goal{color:var(--ink-2);max-width:64ch}
+.src{font-size:.82rem;color:var(--muted)}
+.top-side{display:grid;gap:6px;min-width:0}
+select{background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--r);padding:7px 10px;min-height:38px}
+#sprintSel{font-weight:600;min-width:210px;max-width:100%}
+
+.strip{display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:12px 18px}
+.strip strong{font:700 1rem/1.3 var(--f-display)}
+.strip .obj{color:var(--ink-2);flex:1 1 280px;min-width:0}
+.retro{flex-basis:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px 18px;border-top:1px solid var(--line);padding-top:10px;margin-top:2px;font-size:.88rem}
+.retro b{display:block;font:500 .7rem/1.4 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.chip{display:inline-flex;align-items:center;gap:6px;font:500 .74rem/1 var(--f-mono);letter-spacing:.04em;text-transform:uppercase;padding:5px 8px;border-radius:999px;border:1px solid var(--line-strong);color:var(--ink-2);white-space:nowrap}
+.chip i{width:7px;height:7px;border-radius:50%;background:var(--st-todo)}
+.chip--activo i{background:var(--st-doing)} .chip--cerrado i{background:var(--st-done)} .chip--planeado i{background:var(--st-todo)}
+
+.block{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:18px 20px;min-width:0}
+.block-h{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px 14px;margin-bottom:14px}
+h2{font:700 1.06rem/1.25 var(--f-display);letter-spacing:-.005em}
+.block-h .sub{font-size:.85rem;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:18px}
+@media (max-width:920px){.grid2{grid-template-columns:minmax(0,1fr)}}
+.empty{color:var(--muted);font-size:.9rem;padding:10px 0}
+
+.metro{display:grid;grid-template-columns:repeat(var(--n,5),minmax(0,1fr));gap:0}
+.st{position:relative;min-width:0}
+.st > button{all:unset;box-sizing:border-box;display:grid;justify-items:center;text-align:center;gap:4px;width:100%;padding:0 6px 4px;cursor:pointer;border-radius:var(--r)}
+.st > button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.st:not(:first-child)::before{content:"";position:absolute;top:13px;right:50%;width:100%;height:4px;background:var(--line-strong);z-index:0}
+.st.prev-done::before{background:var(--accent)}
+.node{position:relative;z-index:1;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--surface);border:3px solid var(--line-strong)}
+.st--completada .node{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.st--completada .node svg{width:15px;height:15px}
+.st--en_curso .node{border-color:var(--accent);background:conic-gradient(var(--accent) calc(var(--p,0) * 1%),var(--accent-track) 0)}
+.st--en_curso .node::after{content:"";width:12px;height:12px;border-radius:50%;background:var(--surface)}
+.st.is-current .node{box-shadow:0 0 0 5px var(--accent-soft)}
+.st-name{font:600 .95rem/1.25 var(--f-display);margin-top:6px}
+.st-meta{font:400 .8rem/1.3 var(--f-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.st-tag{font:500 .68rem/1 var(--f-mono);letter-spacing:.06em;text-transform:uppercase;color:var(--accent);margin-top:2px}
+.st.is-filter > button{background:var(--accent-soft)}
+.st > button:hover .st-name{text-decoration:underline;text-underline-offset:3px}
+@media (max-width:640px){
+  .metro{grid-template-columns:minmax(0,1fr)}
+  .st > button{grid-template-columns:30px minmax(0,1fr);justify-items:start;text-align:left;column-gap:12px;row-gap:0;padding:0 6px 16px 0}
+  .st > button > :not(.node){grid-column:2}
+  .node{grid-row:1 / span 3}
+  .st-name{margin-top:4px}
+  .st:not(:first-child)::before{display:none}
+  .st:not(:last-child)::after{content:"";position:absolute;left:13px;top:30px;bottom:0;width:4px;background:var(--line-strong)}
+  .st--completada:not(:last-child)::after{background:var(--accent)}
+}
+
+.kpis{display:grid;grid-template-columns:1.35fr repeat(3,minmax(0,1fr));gap:12px}
+.kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px 16px;display:grid;gap:6px;align-content:start;min-width:0}
+.kpi .lab{font-size:.84rem;color:var(--ink-2)}
+.kpi .val{font:600 1.75rem/1.1 var(--f-body);letter-spacing:-.01em}
+.kpi .val small{font-size:.95rem;font-weight:500;color:var(--muted);margin-left:4px}
+.kpi--hero .val{font-size:2.6rem}
+.kpi .cap{font-size:.84rem;color:var(--muted)}
+.status{display:flex;gap:6px;align-items:flex-start;font-size:.84rem;color:var(--ink-2)}
+.status svg{flex:none;width:15px;height:15px;margin-top:2px}
+.ic-good{color:var(--st-done)} .ic-warn{color:var(--warn)} .ic-crit{color:var(--st-blocked)}
+.meter{position:relative;height:8px;border-radius:999px;background:var(--accent-track);margin:4px 0 2px}
+.meter > i{position:absolute;left:0;top:0;bottom:0;border-radius:999px;background:var(--accent)}
+.meter > b{position:absolute;top:-4px;bottom:-4px;width:2px;background:var(--ink);border-radius:1px}
+.meter--time{background:var(--surface-2);border:1px solid var(--line)}
+.meter--time > i{background:var(--ink-2)}
+@media (max-width:900px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi--hero .val{font-size:2.2rem}}
+
+.filter{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--accent);color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:4px 6px 4px 10px;font-size:.82rem}
+.filter button{all:unset;cursor:pointer;width:20px;height:20px;display:grid;place-items:center;border-radius:50%}
+.filter button:hover{background:var(--accent-soft)}
+.kanban-scroll{overflow-x:auto;margin:0 -4px;padding:0 4px 6px}
+.kanban{display:grid;grid-template-columns:repeat(5,minmax(214px,1fr));gap:10px;min-height:120px}
+.col{background:var(--surface-2);border-radius:var(--r-lg);display:flex;flex-direction:column;min-width:0}
+.col-h{display:flex;align-items:center;gap:8px;padding:11px 12px 8px}
+.col-h .dot{width:9px;height:9px;border-radius:50%;flex:none}
+.col-h .nm{font-weight:600;font-size:.9rem}
+.col-h .ct{margin-left:auto;font:400 .78rem/1 var(--f-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.col-b{display:grid;gap:8px;padding:0 8px 10px;align-content:start;flex:1}
+.col-b .empty{text-align:center;font-size:.82rem;padding:14px 4px;border:1px dashed var(--line-strong);border-radius:var(--r)}
+.dot--por_hacer{background:var(--st-todo)} .dot--en_progreso{background:var(--st-doing)} .dot--en_revision{background:var(--st-review)} .dot--hecho{background:var(--st-done)} .dot--bloqueado{background:var(--st-blocked)}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow);padding:10px 11px;display:grid;gap:7px;cursor:pointer;min-width:0}
+.card:hover{border-color:var(--line-strong)}
+.card--bloqueado{border-left:3px solid var(--st-blocked)}
+.card--hecho .card-title{color:var(--ink-2)}
+.card-top{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.tid{font:500 .74rem/1 var(--f-mono);color:var(--muted)}
+.card-title{font:600 .92rem/1.32 var(--f-body);overflow-wrap:anywhere}
+.prio{display:inline-flex;align-items:flex-end;gap:2px;height:12px;font-size:0}
+.prio i{display:block;width:3px;border-radius:1px;background:var(--line-strong)}
+.prio i:nth-child(1){height:5px}.prio i:nth-child(2){height:8px}.prio i:nth-child(3){height:12px}
+.prio--baja i:nth-child(-n+1),.prio--media i:nth-child(-n+2),.prio--alta i:nth-child(-n+3){background:var(--ink-2)}
+.prio-wrap{display:inline-flex;align-items:center;gap:5px;font-size:.74rem;color:var(--muted)}
+.steps{display:flex;align-items:center;gap:8px;font:400 .76rem/1 var(--f-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.steps-bar{flex:1;height:4px;border-radius:999px;background:var(--surface-2);overflow:hidden;border:1px solid var(--line)}
+.steps-bar i{display:block;height:100%;background:var(--ink-2)}
+.blk{display:flex;gap:6px;font-size:.8rem;color:var(--ink-2);line-height:1.35}
+.blk svg{flex:none;width:14px;height:14px;margin-top:1px;color:var(--st-blocked)}
+.card-foot{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.fase{font:500 .72rem/1 var(--f-mono);padding:4px 7px;border-radius:var(--r-sm);background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line)}
+.who{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font:600 .64rem/1 var(--f-body);background:var(--ink);color:var(--surface);letter-spacing:.02em}
+.pts{margin-left:auto;font:500 .76rem/1 var(--f-mono);color:var(--ink-2);font-variant-numeric:tabular-nums}
+
+.chart{position:relative;min-width:0}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.legend{display:flex;gap:16px;flex-wrap:wrap;font-size:.82rem;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.key{width:18px;height:0;border-top:2px solid var(--accent)}
+.key--ideal{border-top-color:var(--muted)}
+.ax{font:400 11px var(--f-mono);fill:var(--muted);font-variant-numeric:tabular-nums}
+.ax-strong{font:500 12px var(--f-mono);fill:var(--ink)}
+.tip{position:absolute;pointer-events:none;background:var(--ink);color:var(--surface);font-size:.8rem;line-height:1.4;padding:7px 10px;border-radius:var(--r);white-space:nowrap;z-index:5;box-shadow:var(--shadow)}
+.tip b{font-weight:600}
+
+.log{display:grid;gap:14px;max-height:330px;overflow-y:auto;padding-right:4px}
+.log-day{display:grid;gap:8px}
+.log-day > b{font:500 .72rem/1 var(--f-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.log-e{display:grid;grid-template-columns:44px minmax(0,1fr);gap:10px;font-size:.9rem;align-items:baseline}
+.log-e time{font:400 .78rem/1 var(--f-mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.log-e a{all:unset;cursor:pointer;font:500 .74rem/1 var(--f-mono);color:var(--accent);margin-left:6px}
+.log-e a:hover{text-decoration:underline}
+
+.sp-list{display:grid;gap:4px;margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+.sp-row{all:unset;box-sizing:border-box;cursor:pointer;display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:8px 10px;border-radius:var(--r)}
+.sp-row:hover{background:var(--surface-2)}
+.sp-row.sel{background:var(--accent-soft)}
+.sp-row strong{font-weight:600;font-size:.9rem}
+.sp-row .obj{font-size:.84rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sp-row .rng{font:400 .78rem/1 var(--f-mono);color:var(--muted)}
+.bl{display:grid;gap:2px;max-height:420px;overflow-y:auto}
+.bl-row{display:grid;gap:5px;padding:9px 4px;border-bottom:1px solid var(--line);min-width:0}
+.bl-row:last-child{border-bottom:0}
+.bl-t{all:unset;cursor:pointer;font-weight:600;font-size:.9rem;overflow-wrap:anywhere}
+.bl-t:hover{text-decoration:underline}
+.bl-meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+.modal{position:fixed;inset:0;z-index:40;background:var(--overlay);display:grid;place-items:center;padding:max(16px,env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) max(16px,env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.sheet{background:var(--surface);color:var(--ink);border-radius:var(--r-lg);width:min(560px,100%);max-height:100%;overflow-y:auto;box-shadow:0 10px 40px rgba(0,0,0,.25);border:1px solid var(--line);padding:20px;display:grid;gap:16px}
+.sheet-h{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.sheet-h h3{font:700 1.2rem/1.25 var(--f-display)}
+.x{all:unset;cursor:pointer;width:32px;height:32px;display:grid;place-items:center;border-radius:var(--r);flex:none}
+.x:hover{background:var(--surface-2)}
+.facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px}
+.facts dt{font-size:.78rem;color:var(--muted)}
+.facts dd{font-weight:500;font-size:.92rem}
+.facts .full{grid-column:1 / -1}
+.steps-l{display:grid;gap:6px}
+.steps-l li{display:flex;gap:10px;align-items:flex-start;font-size:.9rem}
+.steps-l .box{flex:none;width:16px;height:16px;margin-top:3px;border-radius:4px;border:1.5px solid var(--line-strong);display:grid;place-items:center}
+.steps-l .ok .box{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.steps-l .ok .box svg{width:11px;height:11px}
+.steps-l .ok span{color:var(--muted);text-decoration:line-through}
+.orig{display:flex;flex-wrap:wrap;gap:6px}
+.orig code{font:500 .78rem/1.2 var(--f-mono);background:var(--surface-2);border:1px solid var(--line);padding:3px 6px;border-radius:var(--r-sm);overflow-wrap:anywhere}
+@media (max-width:520px){.facts{grid-template-columns:minmax(0,1fr)}.retro{grid-template-columns:minmax(0,1fr)}}
+.foot{font-size:.84rem;color:var(--muted);text-align:center;padding-top:4px}
+.foot code{font:500 .85em var(--f-mono)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="notice" class="notice"></div>
+
+  <header class="top">
+    <div class="top-main">
+      <p class="eyebrow">Tablero de sprints</p>
+      <h1 id="pName">Tablero de sprints</h1>
+      <p id="pGoal" class="goal"></p>
+      <p id="pSrc" class="src"></p>
+    </div>
+    <div class="top-side">
+      <label for="sprintSel" class="eyebrow">Sprint</label>
+      <select id="sprintSel" disabled><option value="">Sin sprints</option></select>
+    </div>
+  </header>
+
+  <div id="strip" class="strip"><span class="muted">Aquí verás el sprint seleccionado, sus fechas y su objetivo.</span></div>
+
+  <section class="block" aria-labelledby="hFases">
+    <div class="block-h"><h2 id="hFases">Fases del proyecto</h2><span class="sub">Toca una fase para filtrar las tareas</span></div>
+    <ol id="metro" class="metro"><li class="empty">Aquí aparecerán las fases del proyecto con su avance.</li></ol>
+  </section>
+
+  <section id="kpis" class="kpis" aria-label="Indicadores del sprint"></section>
+
+  <section class="block" aria-labelledby="hKanban">
+    <div class="block-h"><h2 id="hKanban">Tablero del sprint</h2><span id="faseFilter"></span></div>
+    <div class="kanban-scroll"><div id="kanban" class="kanban"></div></div>
+  </section>
+
+  <div class="grid2">
+    <section class="block" aria-labelledby="hBurn">
+      <div class="block-h"><h2 id="hBurn">Burndown</h2>
+        <div class="legend"><span><i class="key"></i>Restante real</span><span><i class="key key--ideal"></i>Ritmo ideal</span></div>
+      </div>
+      <div id="burn" class="chart"></div>
+    </section>
+    <section class="block" aria-labelledby="hLog">
+      <div class="block-h"><h2 id="hLog">Bitácora</h2><span class="sub" id="logSub"></span></div>
+      <ol id="log" class="log"><li class="empty">Los pasos que se vayan haciendo aparecerán aquí.</li></ol>
+    </section>
+  </div>
+
+  <div class="grid2">
+    <section class="block" aria-labelledby="hVel">
+      <div class="block-h"><h2 id="hVel">Velocidad por sprint</h2><span class="sub" id="velSub"></span></div>
+      <div id="vel" class="chart"></div>
+      <div id="spList" class="sp-list"></div>
+    </section>
+    <section class="block" aria-labelledby="hBl">
+      <div class="block-h"><h2 id="hBl">Backlog</h2><span class="sub" id="blSub"></span></div>
+      <ul id="backlog" class="bl"><li class="empty">Las tareas que aún no tienen sprint aparecerán aquí.</li></ul>
+    </section>
+  </div>
+
+  <p class="foot">Para cambiar algo, díselo a Claude en tu proyecto: «terminé…», «agrega…», «cierra el sprint». Este tablero se actualiza solo.</p>
+</div>
+
+<div id="modal" class="modal" hidden><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mTitle" id="sheet"></div></div>
+
+<script src="datos.js"></script>
+<script>
+(() => {
+"use strict";
+const $ = (s, r = document) => r.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ESTADOS = [
+  {id:"por_hacer", nombre:"Por hacer"}, {id:"en_progreso", nombre:"En progreso"},
+  {id:"en_revision", nombre:"En revisión"}, {id:"hecho", nombre:"Hecho"}, {id:"bloqueado", nombre:"Bloqueado"}];
+const ESTADO_N = Object.fromEntries(ESTADOS.map(e => [e.id, e.nombre]));
+const PRIO = {alta:"Alta", media:"Media", baja:"Baja"};
+const PRIO_ORD = {alta:0, media:1, baja:2};
+const SP_EST = {planeado:"Planeado", activo:"Activo", cerrado:"Cerrado"};
+const MESES = ["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"];
+const DIAS = ["dom","lun","mar","mié","jue","vie","sáb"];
+const IC = {
+  check:'<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3.5 8.5l3 3 6-7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  good:'<svg viewBox="0 0 16 16" class="ic-good" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M4.8 8.3l2.1 2.1 4.3-4.6" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  warn:'<svg viewBox="0 0 16 16" class="ic-warn" aria-hidden="true"><path d="M8 1.5l7 12.5H1z" fill="currentColor"/><path d="M8 6v3.6M8 11.6v.2" stroke="#15191b" stroke-width="1.7" stroke-linecap="round"/></svg>',
+  crit:'<svg viewBox="0 0 16 16" class="ic-crit" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="currentColor"/><path d="M5 5l6 6M11 5l-6 6" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  block:'<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.8 12.2l8.4-8.4" stroke="currentColor" stroke-width="1.8"/></svg>',
+  info:'<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 7.2v4.2M8 4.6v.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  x:'<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>'
+};
+
+const S = {ok:false, meta:null, sprints:{}, tareas:{}, bitacora:{}, sel:null, fase:null, unit:"pts", modal:null};
+
+function load(T){
+  if (!T || typeof T !== "object"){ S.ok = false; return; }
+  S.ok = true;
+  S.meta = T.proyecto || null;
+  S.sprints = Object.fromEntries((Array.isArray(T.sprints) ? T.sprints : []).filter(s => s && s.id).map(s => [s.id, s]));
+  S.tareas = Object.fromEntries((Array.isArray(T.tareas) ? T.tareas : []).filter(t => t && t.id).map(t => [t.id, t]));
+  const b = {};
+  (Array.isArray(T.bitacora) ? T.bitacora : []).forEach((e, i) => { if (!e) return; const k = e.sprint || "general"; (b[k] = b[k] || []).push({...e, _i:i}); });
+  S.bitacora = b;
+}
+
+/* Fechas */
+const pad = n => String(n).padStart(2, "0");
+function today(){ const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
+function dayNum(s){ if (!s || typeof s !== "string") return NaN; const [y,m,d] = s.split("-").map(Number); return Date.UTC(y, m-1, d) / 864e5; }
+function fromDay(n){ const d = new Date(n * 864e5); return `${d.getUTCFullYear()}-${pad(d.getUTCMonth()+1)}-${pad(d.getUTCDate())}`; }
+function fmtD(s){ if (!s || typeof s !== "string") return "—"; const [, m, d] = s.split("-").map(Number); return m ? `${d} ${MESES[m-1]}` : s; }
+function fmtDW(s){ const n = dayNum(s); if (isNaN(n)) return "—"; return `${DIAS[new Date(n*864e5).getUTCDay()]} ${fmtD(s)}`; }
+function fmtRange(a, b){
+  if (!a || !b) return a ? fmtD(a) : "";
+  const [, ma, da] = a.split("-").map(Number), [, mb, db] = b.split("-").map(Number);
+  return ma === mb ? `${da}–${db} ${MESES[mb-1]}` : `${fmtD(a)} – ${fmtD(b)}`;
+}
+const num = v => (Math.round(v * 10) / 10).toLocaleString("es-MX");
+
+/* Derivados */
+const allTasks = () => Object.values(S.tareas);
+const sprintTasks = id => allTasks().filter(t => t.sprint === id);
+const W = t => S.unit === "pts" ? (Number(t.puntos) || 0) : 1;
+const sumW = ts => ts.reduce((a, t) => a + W(t), 0);
+const unitTxt = n => S.unit === "pts" ? "pts" : (n === 1 ? "tarea" : "tareas");
+const sortedSprints = () => Object.values(S.sprints).sort((a, b) => (dayNum(a.inicio) || 0) - (dayNum(b.inicio) || 0) || String(a.id).localeCompare(String(b.id)));
+const faseName = id => (S.meta?.fases || []).find(f => f.id === id)?.nombre || id || "Sin fase";
+const selSprint = () => S.sel && S.sprints[S.sel] ? S.sprints[S.sel] : null;
+const byOrder = (a, b) => (PRIO_ORD[a.prioridad] ?? 1) - (PRIO_ORD[b.prioridad] ?? 1) || (a.orden ?? 1e9) - (b.orden ?? 1e9) || String(a.id).localeCompare(String(b.id));
+const initials = s => String(s || "").trim().split(/\s+/).map(w => w[0]).join("").slice(0, 2).toUpperCase() || "?";
+
+function derive(){
+  S.unit = allTasks().some(t => Number(t.puntos) > 0) ? "pts" : "tareas";
+  if (!S.sel || !S.sprints[S.sel]){
+    const act = S.meta?.sprintActivo, list = sortedSprints();
+    S.sel = act && S.sprints[act] ? act : (list.find(s => s.estado === "activo")?.id || list[list.length - 1]?.id || null);
+  }
+}
+function phaseStats(){
+  const ts = allTasks();
+  return (S.meta?.fases || []).map(f => {
+    const mine = ts.filter(t => t.fase === f.id);
+    let tot = sumW(mine), done = sumW(mine.filter(t => t.estado === "hecho"));
+    if (!tot && mine.length){ tot = mine.length; done = mine.filter(t => t.estado === "hecho").length; }
+    const started = mine.some(t => t.estado && t.estado !== "por_hacer");
+    const estado = mine.length && tot > 0 && done === tot ? "completada" : started ? "en_curso" : "pendiente";
+    return {...f, tot, done, n:mine.length, pct: tot ? Math.round(done / tot * 100) : 0, estado};
+  });
+}
+function sprintCalc(sp){
+  const ts = sprintTasks(sp.id);
+  const tot = sumW(ts), done = sumW(ts.filter(t => t.estado === "hecho"));
+  const d0 = dayNum(sp.inicio), d1 = dayNum(sp.fin), t0 = dayNum(today());
+  const len = d1 - d0 + 1;
+  let day = null, left = null, expect = null;
+  if (len > 0 && !isNaN(len)){
+    if (sp.estado === "cerrado"){ day = len; left = 0; }
+    else if (t0 < d0){ day = 0; left = d1 - t0; }
+    else { day = Math.min(len, t0 - d0 + 1); left = Math.max(0, d1 - t0); }
+    expect = t0 < d0 ? 0 : len > 1 ? Math.min(1, Math.max(0, (Math.min(t0, d1) - d0) / (len - 1))) : 1;
+  }
+  return {ts, tot, done, pct: tot ? Math.round(done / tot * 100) : 0, len, day, left, expect, blocked: ts.filter(t => t.estado === "bloqueado")};
+}
+function velOf(sp){
+  if (sp.estado !== "cerrado") return null;
+  if (typeof sp.velocidad === "number") return sp.velocidad;
+  return sumW(sprintTasks(sp.id).filter(t => t.estado === "hecho"));
+}
+
+/* Render */
+function render(){
+  derive();
+  renderNotice(); renderHeader(); renderMetro(); renderKpis(); renderKanban();
+  renderBurn(); renderLog(); renderVel(); renderBacklog();
+  if (S.modal && !S.tareas[S.modal]) closeModal();
+}
+function renderNotice(){
+  const out = [];
+  if (!S.ok) out.push(`${IC.info}<span>No encontré <code>datos.js</code> junto a este archivo, o tiene un error. Abre Claude Code en tu proyecto y escribe <code>/gestor-sprints</code> para crear o reparar el plan.</span>`);
+  else if (!allTasks().length) out.push(`${IC.info}<span>El tablero todavía no tiene tareas. Pídele a Claude que las agregue.</span>`);
+  $("#notice").innerHTML = out.map(h => `<p>${h}</p>`).join("");
+}
+let selKey = "";
+function renderHeader(){
+  const m = S.meta;
+  $("#pName").textContent = m?.nombre || "Tablero de sprints";
+  document.title = m?.nombre ? `Sprints · ${m.nombre}` : "Tablero de sprints";
+  $("#pGoal").textContent = m?.objetivo || "";
+  const src = m?.origen === "analisis" ? "Plan creado a partir de un análisis del proyecto (detalles en ANALISIS.md)"
+    : m?.origen === "descubierto" ? "Fases y tareas encontradas en el proyecto" : "";
+  $("#pSrc").textContent = [src, m?.actualizado ? `Actualizado el ${fmtD(m.actualizado)}` : ""].filter(Boolean).join(" · ");
+  const list = sortedSprints(), sel = $("#sprintSel");
+  const key = list.map(s => `${s.id}|${s.nombre}|${s.estado}`).join(";");
+  if (key !== selKey){
+    selKey = key;
+    sel.innerHTML = list.length ? list.map(s => `<option value="${esc(s.id)}">${esc(s.nombre || s.id)} · ${esc(SP_EST[s.estado] || s.estado || "")}</option>`).join("") : '<option value="">Sin sprints</option>';
+  }
+  sel.disabled = !list.length;
+  sel.value = S.sel || "";
+  const sp = selSprint(), strip = $("#strip");
+  if (!sp){ strip.innerHTML = '<span class="muted">Aquí verás el sprint seleccionado, sus fechas y su objetivo.</span>'; return; }
+  const r = sp.retro && (sp.retro.bien || sp.retro.mejorar || sp.retro.acciones);
+  strip.innerHTML = `<span class="chip chip--${esc(sp.estado)}"><i></i>${esc(SP_EST[sp.estado] || sp.estado || "")}</span>
+    <strong>${esc(sp.nombre || sp.id)}</strong><span class="mono muted">${esc(fmtRange(sp.inicio, sp.fin))}</span>
+    ${sp.fase ? `<span class="fase">${esc(faseName(sp.fase))}</span>` : ""}
+    <span class="obj">${sp.objetivo ? "Objetivo: " + esc(sp.objetivo) : ""}</span>
+    ${r ? `<div class="retro"><div><b>Salió bien</b>${esc(sp.retro.bien || "—")}</div><div><b>A mejorar</b>${esc(sp.retro.mejorar || "—")}</div><div><b>Acciones</b>${esc(sp.retro.acciones || "—")}</div></div>` : ""}`;
+}
+function renderMetro(){
+  const el = $("#metro"), st = phaseStats();
+  if (!st.length){ el.innerHTML = '<li class="empty">Aquí aparecerán las fases del proyecto con su avance.</li>'; return; }
+  el.style.setProperty("--n", st.length);
+  const cur = S.meta?.faseActual;
+  el.innerHTML = st.map((f, i) => {
+    const prevDone = i > 0 && st[i-1].estado === "completada";
+    const lab = f.estado === "completada" ? "Completada" : f.estado === "en_curso" ? "En curso" : "Pendiente";
+    const meta = f.n ? `${f.pct} % · ${num(f.done)}/${num(f.tot)} ${S.unit === "pts" ? "pts" : "tareas"}` : "Sin tareas";
+    return `<li class="st st--${f.estado}${prevDone ? " prev-done" : ""}${f.id === cur ? " is-current" : ""}${S.fase === f.id ? " is-filter" : ""}">
+      <button type="button" data-fase="${esc(f.id)}" aria-pressed="${S.fase === f.id}" title="${esc(f.descripcion || "")}" aria-label="${esc(f.nombre)}: ${lab}, ${esc(meta)}. Filtrar tareas por esta fase">
+        <span class="node" style="--p:${f.pct}" aria-hidden="true">${f.estado === "completada" ? IC.check : ""}</span>
+        <span class="st-name">${esc(f.nombre)}</span>
+        <span class="st-meta">${esc(meta)}</span>
+        ${f.id === cur ? '<span class="st-tag">Fase actual</span>' : `<span class="st-meta">${lab}</span>`}
+      </button></li>`;
+  }).join("");
+}
+function renderKpis(){
+  const el = $("#kpis"), sp = selSprint();
+  if (!sp){ el.innerHTML = `<div class="kpi kpi--hero"><span class="lab">Avance del sprint</span><span class="val">—</span><span class="cap">Cuando haya un sprint verás aquí sus indicadores.</span></div>`; return; }
+  const c = sprintCalc(sp), u = unitTxt(c.tot);
+  let pace = "";
+  if (sp.estado === "activo" && c.tot && c.expect !== null){
+    const exp = Math.round(c.expect * 100);
+    pace = c.pct + 5 >= exp
+      ? `<span class="status">${IC.good}<span>Al ritmo esperado (~${exp} % a hoy)</span></span>`
+      : `<span class="status">${IC.warn}<span>Por debajo del ritmo: a hoy se esperaba ~${exp} %</span></span>`;
+  } else if (sp.estado === "cerrado") pace = `<span class="status">${IC.good}<span>Sprint cerrado</span></span>`;
+  const mark = sp.estado === "activo" && c.expect !== null ? `<b style="left:calc(${(c.expect*100).toFixed(1)}% - 1px)" title="Ritmo ideal a hoy"></b>` : "";
+  const hero = `<div class="kpi kpi--hero"><span class="lab">Avance del sprint</span><span class="val">${c.pct} %</span>
+    <div class="meter" role="img" aria-label="${c.pct} % completado"><i style="width:${c.pct}%"></i>${mark}</div>
+    <span class="cap">${num(c.done)} de ${num(c.tot)} ${u} hechos</span>${pace}</div>`;
+  let time;
+  if (c.len > 0){
+    const tp = Math.round((c.day / c.len) * 100);
+    const cap = sp.estado === "cerrado" ? `Terminó el ${fmtD(sp.fin)}` : sp.estado === "planeado" || c.day === 0 ? `Empieza el ${fmtD(sp.inicio)}` :
+      `${c.left} ${c.left === 1 ? "día restante" : "días restantes"} · termina el ${fmtD(sp.fin)}`;
+    time = `<div class="kpi"><span class="lab">Tiempo</span><span class="val">Día ${c.day}<small>de ${c.len}</small></span>
+      <div class="meter meter--time" role="img" aria-label="${tp} % del tiempo transcurrido"><i style="width:${tp}%"></i></div><span class="cap">${cap}</span></div>`;
+  } else time = `<div class="kpi"><span class="lab">Tiempo</span><span class="val">—</span><span class="cap">El sprint no tiene fechas.</span></div>`;
+  const nb = c.blocked.length;
+  const blk = `<div class="kpi"><span class="lab">Bloqueadas</span><span class="val">${nb}</span>
+    ${nb ? `<span class="status">${IC.crit}<span>${esc(c.blocked[0].titulo)}${nb > 1 ? ` y ${nb - 1} más` : ""}</span></span>` : `<span class="status">${IC.good}<span>Nada bloqueado</span></span>`}</div>`;
+  const closed = sortedSprints().filter(s => s.estado === "cerrado");
+  const avg = closed.length ? closed.reduce((a, s) => a + velOf(s), 0) / closed.length : null;
+  const vel = `<div class="kpi"><span class="lab">Velocidad promedio</span>
+    <span class="val">${avg === null ? "—" : num(avg)}${avg === null ? "" : `<small>${S.unit === "pts" ? "pts" : "tareas"}</small>`}</span>
+    <span class="cap">${avg === null ? "Aparece al cerrar el primer sprint." : `${closed.length} ${closed.length === 1 ? "sprint cerrado" : "sprints cerrados"}`}</span>
+    ${avg !== null && sp.estado !== "cerrado" && c.tot > avg * 1.15 ? `<span class="status">${IC.warn}<span>Este sprint compromete ${num(c.tot)}, más que el promedio</span></span>` : ""}</div>`;
+  el.innerHTML = hero + time + blk + vel;
+}
+function cardHTML(t){
+  const ps = Array.isArray(t.pasos) ? t.pasos : [], pd = ps.filter(p => p && p.hecho).length;
+  return `<article class="card card--${esc(t.estado)}" data-id="${esc(t.id)}" tabindex="0" role="button" aria-label="${esc(t.titulo)}">
+    <div class="card-top"><span class="tid">${esc(t.id)}</span>
+      <span class="prio-wrap" title="Prioridad ${esc(PRIO[t.prioridad] || "Media")}"><span class="prio prio--${esc(t.prioridad || "media")}" aria-hidden="true"><i></i><i></i><i></i></span>${esc(PRIO[t.prioridad] || "Media")}</span></div>
+    <h3 class="card-title">${esc(t.titulo || "Sin título")}</h3>
+    ${ps.length ? `<div class="steps"><span class="steps-bar"><i style="width:${Math.round(pd / ps.length * 100)}%"></i></span><span>${pd}/${ps.length} pasos</span></div>` : ""}
+    ${t.estado === "bloqueado" && t.bloqueo ? `<p class="blk">${IC.block}<span>${esc(t.bloqueo)}</span></p>` : ""}
+    <div class="card-foot"><span class="fase">${esc(faseName(t.fase))}</span>
+      ${t.responsable ? `<span class="who" title="${esc(t.responsable)}">${esc(initials(t.responsable))}</span>` : ""}
+      ${Number(t.puntos) > 0 ? `<span class="pts">${num(Number(t.puntos))} pts</span>` : ""}</div>
+  </article>`;
+}
+function renderKanban(){
+  const sp = selSprint();
+  const ts = sp ? sprintTasks(sp.id).filter(t => !S.fase || t.fase === S.fase) : [];
+  $("#kanban").innerHTML = ESTADOS.map(e => {
+    const col = ts.filter(t => (t.estado || "por_hacer") === e.id).sort(byOrder), w = sumW(col);
+    return `<div class="col"><div class="col-h"><span class="dot dot--${e.id}"></span><span class="nm">${e.nombre}</span>
+      <span class="ct">${col.length}${S.unit === "pts" && w ? ` · ${num(w)} pts` : ""}</span></div>
+      <div class="col-b">${col.length ? col.map(cardHTML).join("") : '<p class="empty">Sin tareas</p>'}</div></div>`;
+  }).join("");
+  $("#faseFilter").innerHTML = S.fase ? `<span class="filter">Fase: ${esc(faseName(S.fase))}<button type="button" data-clear-fase aria-label="Quitar filtro de fase">${IC.x}</button></span>` : "";
+}
+
+function niceStep(m){ return m <= 10 ? 2 : m <= 25 ? 5 : m <= 60 ? 10 : m <= 150 ? 25 : 50; }
+function renderBurn(){
+  const el = $("#burn"), sp = selSprint();
+  const empty = msg => { el.innerHTML = `<p class="empty">${msg}</p>`; };
+  if (!sp) return empty("Cuando haya un sprint verás aquí su burndown.");
+  const c = sprintCalc(sp);
+  if (!c.tot) return empty(`Este sprint todavía no tiene tareas${S.unit === "pts" ? " con puntos" : ""}.`);
+  if (!(c.len > 1)) return empty("El sprint necesita fecha de inicio y de fin para dibujar el burndown.");
+  const d0 = dayNum(sp.inicio), tIdx = dayNum(today()) - d0;
+  const last = sp.estado === "cerrado" ? c.len - 1 : (sp.estado === "planeado" || tIdx < 0) ? -1 : Math.min(c.len - 1, tIdx);
+  const real = [];
+  for (let i = 0; i <= last; i++){
+    const ds = fromDay(d0 + i);
+    real.push(c.tot - sumW(c.ts.filter(t => t.estado === "hecho" && t.completada && t.completada <= ds)));
+  }
+  const Wd = Math.max(300, Math.round(el.clientWidth || 600)), H = 248, m = {l:34, r:62, t:14, b:30};
+  const iw = Wd - m.l - m.r, ih = H - m.t - m.b, step = niceStep(c.tot), ymax = Math.ceil(c.tot / step) * step;
+  const X = i => m.l + i / (c.len - 1) * iw, Y = v => m.t + ih - v / ymax * ih;
+  const ideal = i => c.tot * (1 - i / (c.len - 1));
+  let g = "";
+  for (let v = 0; v <= ymax; v += step){
+    g += `<line x1="${m.l}" x2="${m.l + iw}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(${v === 0 ? "--line-strong" : "--line"})" stroke-width="1"/>`;
+    g += `<text class="ax" x="${m.l - 8}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`;
+  }
+  const nt = Math.min(iw < 380 ? 3 : 5, c.len), ticks = [...new Set(Array.from({length:nt}, (_, k) => Math.round(k * (c.len - 1) / (nt - 1))))];
+  ticks.forEach(i => { g += `<text class="ax" x="${X(i)}" y="${H - 8}" text-anchor="${i === 0 ? "start" : i === c.len - 1 ? "end" : "middle"}">${fmtD(fromDay(d0 + i))}</text>`; });
+  if (sp.estado === "activo" && tIdx >= 0 && tIdx <= c.len - 1){
+    g += `<line x1="${X(tIdx)}" x2="${X(tIdx)}" y1="${m.t}" y2="${m.t + ih}" stroke="var(--line-strong)" stroke-width="1"/>`;
+    g += `<text class="ax" x="${X(tIdx) + 5}" y="${m.t + 10}">hoy</text>`;
+  }
+  g += `<line x1="${X(0)}" y1="${Y(c.tot)}" x2="${X(c.len - 1)}" y2="${Y(0)}" stroke="var(--muted)" stroke-width="2" stroke-linecap="round" opacity=".75"/>`;
+  if (real.length){
+    const pts = real.map((v, i) => `${X(i).toFixed(1)},${Y(v).toFixed(1)}`);
+    g += `<path d="M${pts.join("L")}L${X(real.length - 1).toFixed(1)},${Y(0)}L${X(0)},${Y(0)}Z" fill="var(--accent)" opacity=".1"/>`;
+    g += `<path d="M${pts.join("L")}" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const lx = X(real.length - 1), ly = Y(real[real.length - 1]);
+    g += `<circle cx="${lx}" cy="${ly}" r="5" fill="var(--accent)" stroke="var(--surface)" stroke-width="2"/>`;
+    g += `<text class="ax-strong" x="${lx + 9}" y="${ly + 4}">${num(real[real.length - 1])} ${S.unit === "pts" ? "pts" : ""}</text>`;
+  }
+  g += `<line class="bx" x1="0" x2="0" y1="${m.t}" y2="${m.t + ih}" stroke="var(--ink-2)" stroke-width="1" visibility="hidden"/>`;
+  g += `<rect class="bhit" x="${m.l}" y="${m.t}" width="${iw}" height="${ih}" fill="transparent"/>`;
+  el.innerHTML = `<svg viewBox="0 0 ${Wd} ${H}" role="img" aria-label="Burndown de ${esc(sp.nombre || sp.id)}: quedan ${real.length ? num(real[real.length - 1]) : num(c.tot)} de ${num(c.tot)} ${unitTxt(c.tot)}">${g}</svg><div class="tip" hidden></div>`;
+  const svg = el.querySelector("svg"), tip = el.querySelector(".tip"), bx = el.querySelector(".bx"), hit = el.querySelector(".bhit");
+  hit.addEventListener("pointermove", e => {
+    const r = svg.getBoundingClientRect(), sx = Wd / r.width, px = (e.clientX - r.left) * sx;
+    const i = Math.max(0, Math.min(c.len - 1, Math.round((px - m.l) / iw * (c.len - 1))));
+    bx.setAttribute("x1", X(i)); bx.setAttribute("x2", X(i)); bx.setAttribute("visibility", "visible");
+    const u = S.unit === "pts" ? " pts" : "";
+    tip.innerHTML = `<b>${fmtDW(fromDay(d0 + i))}</b><br>${i <= last ? `Restante: ${num(real[i])}${u}<br>` : ""}Ideal: ${num(ideal(i))}${u}`;
+    tip.hidden = false;
+    const tx = X(i) / sx, w = tip.offsetWidth;
+    tip.style.left = Math.max(0, Math.min(r.width - w, tx + 12 > r.width - w ? tx - w - 12 : tx + 12)) + "px";
+    tip.style.top = "8px";
+  });
+  hit.addEventListener("pointerleave", () => { tip.hidden = true; bx.setAttribute("visibility", "hidden"); });
+}
+
+function renderLog(){
+  const sp = selSprint(), el = $("#log");
+  if (!sp){ el.innerHTML = '<li class="empty">Los pasos que se vayan haciendo aparecerán aquí.</li>'; $("#logSub").textContent = ""; return; }
+  const ents = (S.bitacora[sp.id] || []).slice().sort((a, b) => `${b.fecha}${b.hora}`.localeCompare(`${a.fecha}${a.hora}`) || b._i - a._i);
+  $("#logSub").textContent = ents.length ? `${ents.length} ${ents.length === 1 ? "paso" : "pasos"} en ${sp.nombre || sp.id}` : "";
+  if (!ents.length){ el.innerHTML = '<li class="empty">Todavía no hay pasos registrados en este sprint.</li>'; return; }
+  const td = today(), yd = fromDay(dayNum(td) - 1), groups = [];
+  ents.forEach(e => { const g = groups[groups.length - 1]; if (g && g.f === e.fecha) g.e.push(e); else groups.push({f:e.fecha, e:[e]}); });
+  el.innerHTML = groups.map(g => `<li class="log-day"><b>${g.f === td ? "Hoy" : g.f === yd ? "Ayer" : esc(fmtDW(g.f))}</b>
+    ${g.e.map(e => `<div class="log-e"><time>${esc(e.hora || "")}</time><span>${esc(e.texto)}${e.tarea && S.tareas[e.tarea] ? `<a role="button" tabindex="0" data-open="${esc(e.tarea)}">${esc(e.tarea)}</a>` : ""}</span></div>`).join("")}</li>`).join("");
+}
+
+function rtop(x, y, w, h, r){ r = Math.min(r, h, w / 2); return `M${x},${y + h}V${y + r}A${r},${r} 0 0 1 ${x + r},${y}H${x + w - r}A${r},${r} 0 0 1 ${x + w},${y + r}V${y + h}Z`; }
+function renderVel(){
+  const el = $("#vel"), list = sortedSprints();
+  if (!list.length){ el.innerHTML = '<p class="empty">Aquí verás cuánto avanza el equipo en cada sprint.</p>'; $("#spList").innerHTML = ""; $("#velSub").textContent = ""; return; }
+  const data = list.map(s => { const c = sprintCalc(s); return {s, v: s.estado === "cerrado" ? velOf(s) : s.estado === "activo" ? c.done : null, tot: c.tot}; });
+  const closed = data.filter(d => d.s.estado === "cerrado");
+  const avg = closed.length ? closed.reduce((a, d) => a + d.v, 0) / closed.length : null;
+  $("#velSub").textContent = avg === null ? "" : `Promedio ${num(avg)} ${S.unit === "pts" ? "pts" : "tareas"}`;
+  const maxV = Math.max(1, ...data.map(d => d.v || 0));
+  const Wd = Math.max(280, Math.round(el.clientWidth || 500)), H = 210, m = {l:30, r:12, t:22, b:40};
+  const iw = Wd - m.l - m.r, ih = H - m.t - m.b, step = niceStep(maxV), ymax = Math.ceil(maxV / step) * step;
+  const Y = v => m.t + ih - v / ymax * ih, band = iw / data.length, bw = Math.min(24, band * .5);
+  let g = "";
+  for (let v = 0; v <= ymax; v += step){
+    g += `<line x1="${m.l}" x2="${m.l + iw}" y1="${Y(v)}" y2="${Y(v)}" stroke="var(${v === 0 ? "--line-strong" : "--line"})" stroke-width="1"/>`;
+    g += `<text class="ax" x="${m.l - 8}" y="${Y(v) + 4}" text-anchor="end">${v}</text>`;
+  }
+  data.forEach((d, i) => {
+    const cx = m.l + band * i + band / 2, x = cx - bw / 2;
+    if (d.v !== null && d.v > 0) g += `<path d="${rtop(x, Y(d.v), bw, Y(0) - Y(d.v), 4)}" fill="var(${d.s.estado === "cerrado" ? "--accent" : "--accent-track"})"/>`;
+    if (d.v !== null) g += `<text class="ax-strong" x="${cx}" y="${Y(d.v || 0) - 7}" text-anchor="middle">${num(d.v)}</text>`;
+    const short = String(d.s.nombre || d.s.id).replace(/^Sprint\s*/i, "S");
+    g += `<text class="ax" x="${cx}" y="${H - 22}" text-anchor="middle" style="fill:var(--ink-2)">${esc(short)}</text>`;
+    g += `<text class="ax" x="${cx}" y="${H - 8}" text-anchor="middle">${d.s.estado === "cerrado" ? "" : d.s.estado === "activo" ? "en curso" : "planeado"}</text>`;
+    g += `<rect class="vhit" data-i="${i}" x="${m.l + band * i}" y="${m.t}" width="${band}" height="${ih}" fill="transparent"/>`;
+  });
+  if (avg !== null){
+    g += `<line x1="${m.l}" x2="${m.l + iw}" y1="${Y(avg)}" y2="${Y(avg)}" stroke="var(--ink-2)" stroke-width="1" opacity=".55"/>`;
+    g += `<text class="ax" x="${m.l + iw}" y="${Y(avg) - 5}" text-anchor="end">promedio ${num(avg)}</text>`;
+  }
+  el.innerHTML = `<svg viewBox="0 0 ${Wd} ${H}" role="img" aria-label="Velocidad por sprint">${g}</svg><div class="tip" hidden></div>`;
+  const svg = el.querySelector("svg"), tip = el.querySelector(".tip");
+  el.querySelectorAll(".vhit").forEach(r => {
+    r.addEventListener("pointerenter", () => {
+      const d = data[+r.dataset.i], u = S.unit === "pts" ? "pts" : "tareas";
+      tip.innerHTML = `<b>${esc(d.s.nombre || d.s.id)}</b> · ${esc(fmtRange(d.s.inicio, d.s.fin))}<br>` +
+        (d.s.estado === "planeado" ? `Planeado · ${num(d.tot)} ${u} comprometidos` : `${num(d.v)} de ${num(d.tot)} ${u} hechos${d.s.estado === "activo" ? " (en curso)" : ""}`);
+      tip.hidden = false;
+      const rr = svg.getBoundingClientRect(), sx = Wd / rr.width, cx = (m.l + band * (+r.dataset.i) + band / 2) / sx;
+      tip.style.left = Math.max(0, Math.min(rr.width - tip.offsetWidth, cx - tip.offsetWidth / 2)) + "px";
+      tip.style.top = "0px";
+    });
+    r.addEventListener("pointerleave", () => { tip.hidden = true; });
+  });
+  $("#spList").innerHTML = list.map(s => `<button type="button" class="sp-row${s.id === S.sel ? " sel" : ""}" data-sprint="${esc(s.id)}" aria-pressed="${s.id === S.sel}">
+    <strong>${esc(s.nombre || s.id)}</strong><span class="obj">${esc(s.objetivo || "")}</span><span class="chip chip--${esc(s.estado)}"><i></i>${esc(SP_EST[s.estado] || s.estado || "")}</span>
+    <span></span><span class="rng">${esc(fmtRange(s.inicio, s.fin))}</span><span></span></button>`).join("");
+}
+
+function renderBacklog(){
+  const ts = allTasks().filter(t => t.sprint === "backlog" && t.estado !== "hecho" && (!S.fase || t.fase === S.fase)).sort(byOrder), w = sumW(ts);
+  $("#blSub").textContent = ts.length ? `${ts.length} ${ts.length === 1 ? "tarea" : "tareas"}${S.unit === "pts" ? ` · ${num(w)} pts` : ""}` : "";
+  $("#backlog").innerHTML = ts.length ? ts.map(t => `<li class="bl-row"><button type="button" class="bl-t" data-open="${esc(t.id)}">${esc(t.titulo)}</button>
+      <div class="bl-meta"><span class="tid">${esc(t.id)}</span><span class="fase">${esc(faseName(t.fase))}</span>
+      <span class="prio-wrap"><span class="prio prio--${esc(t.prioridad || "media")}" aria-hidden="true"><i></i><i></i><i></i></span>${esc(PRIO[t.prioridad] || "Media")}</span>
+      ${Number(t.puntos) > 0 ? `<span class="tid">${num(Number(t.puntos))} pts</span>` : ""}</div></li>`).join("")
+    : `<li class="empty">${S.fase ? "No hay tareas de esta fase en el backlog." : "Las tareas que aún no tienen sprint aparecerán aquí."}</li>`;
+}
+
+/* Detalle de tarea (solo lectura) */
+let lastFocus = null;
+function openTask(id){
+  const t = S.tareas[id]; if (!t) return;
+  S.modal = id;
+  const ps = Array.isArray(t.pasos) ? t.pasos : [];
+  const orig = Array.isArray(t.origen) ? t.origen : (t.origen ? [t.origen] : []);
+  const sp = t.sprint === "backlog" ? "Backlog" : t.sprint === "previo" ? "Antes del tablero" : (S.sprints[t.sprint]?.nombre || t.sprint || "—");
+  $("#sheet").innerHTML = `<div class="sheet-h"><div><p class="eyebrow">${esc(t.id)}</p><h3 id="mTitle">${esc(t.titulo)}</h3></div>
+      <button type="button" class="x" data-close aria-label="Cerrar">${IC.x}</button></div>
+    <dl class="facts">
+      <div><dt>Estado</dt><dd>${esc(ESTADO_N[t.estado] || t.estado || "—")}</dd></div>
+      <div><dt>Sprint</dt><dd>${esc(sp)}</dd></div>
+      <div><dt>Fase</dt><dd>${esc(faseName(t.fase))}</dd></div>
+      <div><dt>Prioridad</dt><dd>${esc(PRIO[t.prioridad] || "Media")}</dd></div>
+      <div><dt>Puntos</dt><dd>${Number(t.puntos) > 0 ? num(Number(t.puntos)) : "—"}</dd></div>
+      <div><dt>Responsable</dt><dd>${esc(t.responsable || "—")}</dd></div>
+      ${t.completada ? `<div><dt>Completada</dt><dd>${esc(fmtDW(t.completada))}</dd></div>` : ""}
+      ${t.estado === "bloqueado" && t.bloqueo ? `<div class="full"><dt>Qué la bloquea</dt><dd>${esc(t.bloqueo)}</dd></div>` : ""}
+      ${t.descripcion ? `<div class="full"><dt>Notas</dt><dd style="font-weight:400">${esc(t.descripcion)}</dd></div>` : ""}
+    </dl>
+    ${ps.length ? `<div><p class="eyebrow" style="margin-bottom:8px">Pasos · ${ps.filter(p => p && p.hecho).length}/${ps.length}</p><ul class="steps-l">${ps.map(p => `<li class="${p && p.hecho ? "ok" : ""}"><span class="box">${p && p.hecho ? IC.check : ""}</span><span>${esc(p && p.texto)}</span></li>`).join("")}</ul></div>` : ""}
+    ${orig.length ? `<div><p class="eyebrow" style="margin-bottom:8px">De dónde salió</p><div class="orig">${orig.map(o => `<code>${esc(o)}</code>`).join("")}</div></div>` : ""}`;
+  if ($("#modal").hidden) lastFocus = document.activeElement;
+  $("#modal").hidden = false;
+  $("#sheet .x").focus();
+}
+function closeModal(){ S.modal = null; $("#modal").hidden = true; if (lastFocus && document.contains(lastFocus)) lastFocus.focus(); }
+
+/* Eventos */
+$("#sprintSel").addEventListener("change", e => { S.sel = e.target.value || null; render(); });
+$("#metro").addEventListener("click", e => { const b = e.target.closest("[data-fase]"); if (b){ S.fase = S.fase === b.dataset.fase ? null : b.dataset.fase; render(); } });
+$("#faseFilter").addEventListener("click", e => { if (e.target.closest("[data-clear-fase]")){ S.fase = null; render(); } });
+document.addEventListener("click", e => {
+  const c = e.target.closest(".card"); if (c){ openTask(c.dataset.id); return; }
+  const o = e.target.closest("[data-open]"); if (o){ openTask(o.dataset.open); return; }
+  const sr = e.target.closest("[data-sprint]"); if (sr){ S.sel = sr.dataset.sprint; render(); }
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && S.modal) closeModal();
+  const t = e.target.closest && e.target.closest(".card, [data-open]");
+  if (t && (e.key === "Enter" || e.key === " ") && t.tagName !== "BUTTON"){ e.preventDefault(); openTask(t.dataset.id || t.dataset.open); }
+});
+const modal = $("#modal");
+modal.addEventListener("click", e => { if (e.target === modal || e.target.closest("[data-close]")) closeModal(); });
+let rw = 0;
+if ("ResizeObserver" in window) new ResizeObserver(() => { cancelAnimationFrame(rw); rw = requestAnimationFrame(() => { renderBurn(); renderVel(); }); }).observe($("#burn"));
+
+/* Carga inicial y recarga automática de datos.js */
+let lastJSON = "";
+function apply(){ try { const j = JSON.stringify(window.TABLERO ?? null); if (j === lastJSON) return; lastJSON = j; } catch (e) {} load(window.TABLERO); render(); }
+apply();
+setInterval(() => {
+  if (document.visibilityState !== "visible") return;
+  const s = document.createElement("script");
+  s.src = "datos.js?r=" + Date.now();
+  s.onload = () => { s.remove(); apply(); };
+  s.onerror = () => s.remove();
+  document.body.appendChild(s);
+}, 8000);
+})();
+</script>
+</body>
+</html>

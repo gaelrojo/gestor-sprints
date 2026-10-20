@@ -1,0 +1,14 @@
+{
+  "name": "gestor-sprints",
+  "description": "Gestor de sprints con tablero visual para Claude Code",
+  "owner": {
+    "name": "gaelrojo"
+  },
+  "plugins": [
+    {
+      "name": "sprints",
+      "source": "./plugins/sprints",
+      "description": "Fases, sprints, Kanban, burndown y bitácora del proyecto. Importa las tareas existentes o, si no hay, analiza el proyecto y las crea."
+    }
+  ]
+}

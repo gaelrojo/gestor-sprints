@@ -1,0 +1,8 @@
+{
+  "name": "sprints",
+  "description": "Gestiona fases, sprints y tareas de cualquier proyecto con un tablero visual. Busca primero las tareas que ya existen; si no hay ninguna, analiza el proyecto y crea el plan.",
+  "version": "1.0.0",
+  "author": {
+    "name": "gaelrojo"
+  }
+}
